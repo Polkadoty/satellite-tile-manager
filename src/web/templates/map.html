@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}Select Area - Satellite Tile Manager{% endblock %}
+
+{% block head %}
+<style>
+    .map-container {
+        display: grid;
+        grid-template-columns: 1fr 350px;
+        gap: 1.5rem;
+    }
+    #map {
+        height: 600px;
+    }
+    .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    .coordinates {
+        font-family: monospace;
+        background: #f8f9fa;
+        padding: 0.5rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+    }
+    .provider-check {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        background: #f8f9fa;
+        border-radius: 4px;
+        margin-bottom: 0.5rem;
+    }
+    .provider-check input {
+        width: auto;
+    }
+    .tile-info {
+        font-size: 0.85rem;
+        color: #666;
+        margin-top: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Select Area of Interest</h1>
+<p style="margin-bottom: 1rem;">Draw a rectangle on the map to define your region.</p>
+
+<div class="map-container">
+    <div class="card" style="padding: 0; overflow: hidden;">
+        <div id="map"></div>
+    </div>
+
+    <div class="sidebar">
+        <div class="card">
+            <h3>Region Details</h3>
+            <form id="regionForm">
+                <div class="form-group">
+                    <label for="name">Region Name</label>
+                    <input type="text" id="name" name="name" placeholder="e.g., Training Area 1" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <input type="text" id="description" name="description" placeholder="Optional description">
+                </div>
+
+                <div class="form-group">
+                    <label>Bounds</label>
+                    <div class="coordinates" id="boundsDisplay">
+                        Draw a rectangle on the map
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="zoom">Zoom Level</label>
+                    <select id="zoom" name="zoom">
+                        <option value="14">14 (~2.4m GSD)</option>
+                        <option value="15">15 (~1.2m GSD)</option>
+                        <option value="16" selected>16 (~0.6m GSD)</option>
+                        <option value="17">17 (~0.3m GSD)</option>
+                        <option value="18">18 (~0.15m GSD)</option>
+                    </select>
+                    <div class="tile-info" id="tileInfo"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Providers</label>
+                    <div class="provider-check">
+                        <input type="checkbox" id="prov_naip" name="providers" value="naip" checked>
+                        <label for="prov_naip">NAIP (USDA) - Free, US only</label>
+                    </div>
+                    <div class="provider-check">
+                        <input type="checkbox" id="prov_google" name="providers" value="google">
+                        <label for="prov_google">Google Maps - API key required</label>
+                    </div>
+                    <div class="provider-check">
+                        <input type="checkbox" id="prov_bing" name="providers" value="bing">
+                        <label for="prov_bing">Bing Maps - API key required</label>
+                    </div>
+                    <div class="provider-check">
+                        <input type="checkbox" id="prov_mapbox" name="providers" value="mapbox">
+                        <label for="prov_mapbox">Mapbox - Token required</label>
+                    </div>
+                </div>
+
+                <input type="hidden" id="minLat" name="min_lat">
+                <input type="hidden" id="maxLat" name="max_lat">
+                <input type="hidden" id="minLon" name="min_lon">
+                <input type="hidden" id="maxLon" name="max_lon">
+
+                <button type="submit" class="btn btn-success" style="width: 100%;" id="createBtn" disabled>
+                    Create Region & Start Download
+                </button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>Instructions</h3>
+            <ol style="padding-left: 1.25rem; font-size: 0.9rem;">
+                <li>Use the rectangle tool in the map to draw your area</li>
+                <li>Enter a name for this region</li>
+                <li>Select zoom level (higher = more detail, more tiles)</li>
+                <li>Choose which providers to download from</li>
+                <li>Click "Create Region" to start downloading</li>
+            </ol>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Initialize map centered on US
+    const map = L.map('map').setView([39.8283, -98.5795], 4);
+
+    // Add OpenStreetMap base layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Add drawing controls
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    const drawControl = new L.Control.Draw({
+        draw: {
+            polygon: false,
+            polyline: false,
+            circle: false,
+            circlemarker: false,
+            marker: false,
+            rectangle: {
+                shapeOptions: {
+                    color: '#3498db',
+                    weight: 2
+                }
+            }
+        },
+        edit: {
+            featureGroup: drawnItems
+        }
+    });
+    map.addControl(drawControl);
+
+    let currentBounds = null;
+
+    // Handle rectangle creation
+    map.on(L.Draw.Event.CREATED, function(event) {
+        drawnItems.clearLayers();
+        drawnItems.addLayer(event.layer);
+
+        currentBounds = event.layer.getBounds();
+        updateBoundsDisplay();
+        updateTileInfo();
+        document.getElementById('createBtn').disabled = false;
+    });
+
+    // Handle rectangle edit
+    map.on(L.Draw.Event.EDITED, function(event) {
+        event.layers.eachLayer(function(layer) {
+            currentBounds = layer.getBounds();
+            updateBoundsDisplay();
+            updateTileInfo();
+        });
+    });
+
+    // Handle rectangle delete
+    map.on(L.Draw.Event.DELETED, function() {
+        currentBounds = null;
+        document.getElementById('boundsDisplay').textContent = 'Draw a rectangle on the map';
+        document.getElementById('tileInfo').textContent = '';
+        document.getElementById('createBtn').disabled = true;
+    });
+
+    function updateBoundsDisplay() {
+        if (!currentBounds) return;
+
+        const sw = currentBounds.getSouthWest();
+        const ne = currentBounds.getNorthEast();
+
+        document.getElementById('minLat').value = sw.lat.toFixed(6);
+        document.getElementById('maxLat').value = ne.lat.toFixed(6);
+        document.getElementById('minLon').value = sw.lng.toFixed(6);
+        document.getElementById('maxLon').value = ne.lng.toFixed(6);
+
+        document.getElementById('boundsDisplay').innerHTML = `
+            SW: ${sw.lat.toFixed(4)}, ${sw.lng.toFixed(4)}<br>
+            NE: ${ne.lat.toFixed(4)}, ${ne.lng.toFixed(4)}
+        `;
+    }
+
+    function updateTileInfo() {
+        if (!currentBounds) return;
+
+        const zoom = parseInt(document.getElementById('zoom').value);
+        const sw = currentBounds.getSouthWest();
+        const ne = currentBounds.getNorthEast();
+
+        // Calculate approximate tile count
+        const n = Math.pow(2, zoom);
+        const minX = Math.floor((sw.lng + 180) / 360 * n);
+        const maxX = Math.floor((ne.lng + 180) / 360 * n);
+        const minY = Math.floor((1 - Math.log(Math.tan(ne.lat * Math.PI / 180) + 1 / Math.cos(ne.lat * Math.PI / 180)) / Math.PI) / 2 * n);
+        const maxY = Math.floor((1 - Math.log(Math.tan(sw.lat * Math.PI / 180) + 1 / Math.cos(sw.lat * Math.PI / 180)) / Math.PI) / 2 * n);
+
+        const tileCount = (maxX - minX + 1) * (maxY - minY + 1);
+        const providers = document.querySelectorAll('input[name="providers"]:checked').length;
+
+        document.getElementById('tileInfo').innerHTML = `
+            ~${tileCount} tiles per provider<br>
+            ${tileCount * providers} tiles total
+        `;
+    }
+
+    document.getElementById('zoom').addEventListener('change', updateTileInfo);
+    document.querySelectorAll('input[name="providers"]').forEach(cb => {
+        cb.addEventListener('change', updateTileInfo);
+    });
+
+    // Handle form submission
+    document.getElementById('regionForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const providers = Array.from(document.querySelectorAll('input[name="providers"]:checked'))
+            .map(cb => cb.value);
+
+        if (providers.length === 0) {
+            alert('Please select at least one provider');
+            return;
+        }
+
+        const data = {
+            name: document.getElementById('name').value,
+            description: document.getElementById('description').value,
+            min_lat: parseFloat(document.getElementById('minLat').value),
+            max_lat: parseFloat(document.getElementById('maxLat').value),
+            min_lon: parseFloat(document.getElementById('minLon').value),
+            max_lon: parseFloat(document.getElementById('maxLon').value),
+            target_zoom: parseInt(document.getElementById('zoom').value)
+        };
+
+        try {
+            // Create region
+            const createRes = await fetch('/api/v1/regions', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            if (!createRes.ok) throw new Error('Failed to create region');
+            const region = await createRes.json();
+
+            // Start download
+            const downloadRes = await fetch(`/api/v1/regions/${region.id}/download`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({providers: providers})
+            });
+
+            if (!downloadRes.ok) throw new Error('Failed to start download');
+
+            // Redirect to region detail page
+            window.location.href = `/web/regions/${region.id}`;
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    });
+</script>
+{% endblock %}

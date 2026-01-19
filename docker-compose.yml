@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # Development setup with SQLite
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    environment:
+      - DATABASE_URL=sqlite:///./data/tiles.db
+      - DEBUG=true
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      - BING_MAPS_API_KEY=${BING_MAPS_API_KEY:-}
+      - MAPBOX_ACCESS_TOKEN=${MAPBOX_ACCESS_TOKEN:-}
+    restart: unless-stopped
+
+  # Production setup with PostgreSQL
+  app-prod:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - tile_data:/app/data
+    environment:
+      - DATABASE_URL=postgresql://stm:stm@db:5432/stm
+      - DEBUG=false
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      - BING_MAPS_API_KEY=${BING_MAPS_API_KEY:-}
+      - MAPBOX_ACCESS_TOKEN=${MAPBOX_ACCESS_TOKEN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - prod
+
+  db:
+    image: postgis/postgis:15-3.3
+    environment:
+      - POSTGRES_USER=stm
+      - POSTGRES_PASSWORD=stm
+      - POSTGRES_DB=stm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stm -d stm"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    profiles:
+      - prod
+
+volumes:
+  tile_data:
+  postgres_data:

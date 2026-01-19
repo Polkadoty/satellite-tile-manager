@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Tiles - Satellite Tile Manager{% endblock %}
+
+{% block content %}
+<h1>Compare Tiles</h1>
+<p style="margin-bottom: 1.5rem;">Compare satellite tiles from different providers at the same location.</p>
+
+<div class="grid">
+    <div class="card">
+        <h3>Compare by Location</h3>
+        <form id="compareForm">
+            <div class="form-group">
+                <label for="lat">Latitude</label>
+                <input type="number" id="lat" step="any" placeholder="e.g., 37.7749" required>
+            </div>
+            <div class="form-group">
+                <label for="lon">Longitude</label>
+                <input type="number" id="lon" step="any" placeholder="e.g., -122.4194" required>
+            </div>
+            <div class="form-group">
+                <label for="zoom">Zoom Level</label>
+                <select id="zoom">
+                    <option value="14">14</option>
+                    <option value="15">15</option>
+                    <option value="16" selected>16</option>
+                    <option value="17">17</option>
+                    <option value="18">18</option>
+                </select>
+            </div>
+            <button type="submit" class="btn">Find & Compare</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Compare Two Tiles</h3>
+        <form id="compareTilesForm">
+            <div class="form-group">
+                <label for="tileA">Tile A ID</label>
+                <input type="number" id="tileA" placeholder="Enter tile ID" required>
+            </div>
+            <div class="form-group">
+                <label for="tileB">Tile B ID</label>
+                <input type="number" id="tileB" placeholder="Enter tile ID" required>
+            </div>
+            <button type="submit" class="btn">Compare</button>
+        </form>
+    </div>
+</div>
+
+<div class="card" id="results" style="display: none;">
+    <h3>Comparison Results</h3>
+    <div id="resultsContent"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('compareForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const lat = parseFloat(document.getElementById('lat').value);
+    const lon = parseFloat(document.getElementById('lon').value);
+    const zoom = parseInt(document.getElementById('zoom').value);
+
+    try {
+        const res = await fetch('/api/v1/compare/location', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({lat, lon, zoom})
+        });
+
+        const data = await res.json();
+        showResults(data);
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+});
+
+document.getElementById('compareTilesForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const tileA = parseInt(document.getElementById('tileA').value);
+    const tileB = parseInt(document.getElementById('tileB').value);
+
+    try {
+        const res = await fetch('/api/v1/compare', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tile_a_id: tileA, tile_b_id: tileB})
+        });
+
+        const data = await res.json();
+        showResults({comparisons: [data]});
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+});
+
+function showResults(data) {
+    const container = document.getElementById('results');
+    const content = document.getElementById('resultsContent');
+
+    if (data.comparisons && data.comparisons.length > 0) {
+        let html = '<table><thead><tr><th>Tile A</th><th>Tile B</th><th>SSIM</th><th>PSNR</th></tr></thead><tbody>';
+        for (const c of data.comparisons) {
+            html += `<tr>
+                <td>${c.tile_a_id}</td>
+                <td>${c.tile_b_id}</td>
+                <td>${c.ssim_score ? c.ssim_score.toFixed(4) : '-'}</td>
+                <td>${c.psnr_score ? c.psnr_score.toFixed(2) : '-'}</td>
+            </tr>`;
+        }
+        html += '</tbody></table>';
+        content.innerHTML = html;
+    } else {
+        content.innerHTML = '<p>No comparisons available. Make sure tiles exist at this location.</p>';
+    }
+
+    container.style.display = 'block';
+}
+</script>
+{% endblock %}

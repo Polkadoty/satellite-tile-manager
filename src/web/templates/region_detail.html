@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}{{ region.name }} - Satellite Tile Manager{% endblock %}
+
+{% block content %}
+<h1>{{ region.name }}</h1>
+{% if region.description %}
+<p style="color: #666; margin-bottom: 1rem;">{{ region.description }}</p>
+{% endif %}
+
+<div class="stats">
+    <div class="stat">
+        <div class="stat-value">{{ region.downloaded_tiles }}</div>
+        <div class="stat-label">Downloaded</div>
+    </div>
+    <div class="stat">
+        <div class="stat-value">{{ region.total_tiles }}</div>
+        <div class="stat-label">Total Tiles</div>
+    </div>
+    <div class="stat">
+        <div class="stat-value">{{ "%.1f"|format(region.downloaded_tiles / region.total_tiles * 100 if region.total_tiles else 0) }}%</div>
+        <div class="stat-label">Complete</div>
+    </div>
+</div>
+
+<div class="grid">
+    <div class="card">
+        <h3>Region Info</h3>
+        <table>
+            <tr><td>Target GSD</td><td>{{ region.target_gsd }}m</td></tr>
+            <tr><td>Zoom Level</td><td>{{ region.target_zoom or 'Auto' }}</td></tr>
+            <tr><td>Created</td><td>{{ region.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+        </table>
+
+        <h4 style="margin-top: 1rem;">Bounds</h4>
+        <div style="font-family: monospace; font-size: 0.85rem; background: #f8f9fa; padding: 0.5rem; border-radius: 4px;">
+            SW: {{ "%.6f"|format(region.min_lat) }}, {{ "%.6f"|format(region.min_lon) }}<br>
+            NE: {{ "%.6f"|format(region.max_lat) }}, {{ "%.6f"|format(region.max_lon) }}
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Actions</h3>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <button class="btn" onclick="refreshDownload()">Refresh/Retry Download</button>
+            <a href="/api/v1/export/manifest?region_id={{ region.id }}" class="btn" target="_blank">Export Manifest (JSON)</a>
+            <form action="/api/v1/export/zip" method="post" target="_blank" style="margin: 0;">
+                <input type="hidden" name="region_id" value="{{ region.id }}">
+                <button type="submit" class="btn btn-success" style="width: 100%;">Download ZIP</button>
+            </form>
+            <a href="/api/v1/export/drone-package?region_id={{ region.id }}" class="btn" target="_blank">Drone Package</a>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="padding: 0; overflow: hidden;">
+    <div id="map" style="height: 400px;"></div>
+</div>
+
+<div class="card">
+    <h3>Tiles</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Tile</th>
+                <th>Provider</th>
+                <th>GSD</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tile in tiles[:50] %}
+            <tr>
+                <td>{{ tile.zoom }}/{{ tile.tile_x }}/{{ tile.tile_y }}</td>
+                <td>{{ tile.provider.display_name if tile.provider else '-' }}</td>
+                <td>{{ "%.2f"|format(tile.gsd) }}m</td>
+                <td>
+                    <span class="status status-{{ tile.status.value }}">{{ tile.status.value }}</span>
+                </td>
+                <td>
+                    {% if tile.file_path %}
+                    <a href="/api/v1/tiles/{{ tile.id }}/image" class="btn" target="_blank">View</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if tiles|length > 50 %}
+    <p style="margin-top: 1rem; color: #666;">Showing 50 of {{ tiles|length }} tiles. Use API for full list.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const map = L.map('map').setView([
+        ({{ region.min_lat }} + {{ region.max_lat }}) / 2,
+        ({{ region.min_lon }} + {{ region.max_lon }}) / 2
+    ], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Draw region bounds
+    const bounds = [
+        [{{ region.min_lat }}, {{ region.min_lon }}],
+        [{{ region.max_lat }}, {{ region.max_lon }}]
+    ];
+    L.rectangle(bounds, {color: '#3498db', weight: 2, fillOpacity: 0.1}).addTo(map);
+    map.fitBounds(bounds);
+
+    // Draw downloaded tiles
+    {% for tile in tiles %}
+    {% if tile.status.value == 'ready' %}
+    L.rectangle([
+        [{{ tile.min_lat }}, {{ tile.min_lon }}],
+        [{{ tile.max_lat }}, {{ tile.max_lon }}]
+    ], {color: '#27ae60', weight: 1, fillOpacity: 0.2}).addTo(map);
+    {% endif %}
+    {% endfor %}
+
+    async function refreshDownload() {
+        try {
+            const res = await fetch('/api/v1/regions/{{ region.id }}/download', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({providers: ['naip']})
+            });
+            if (res.ok) {
+                alert('Download started. Refresh page to see progress.');
+            } else {
+                alert('Failed to start download');
+            }
+        } catch (err) {
+            alert('Error: ' + err.message);
+        }
+    }
+</script>
+{% endblock %}

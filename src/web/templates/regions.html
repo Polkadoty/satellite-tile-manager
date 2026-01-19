@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Regions - Satellite Tile Manager{% endblock %}
+
+{% block content %}
+<h1>Regions</h1>
+<p style="margin-bottom: 1.5rem;">
+    <a href="/web/map" class="btn btn-success">+ New Region</a>
+</p>
+
+{% if regions %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Bounds</th>
+                <th>Tiles</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for region in regions %}
+            <tr>
+                <td>
+                    <a href="/web/regions/{{ region.id }}">{{ region.name }}</a>
+                    {% if region.description %}
+                    <br><small style="color: #666;">{{ region.description }}</small>
+                    {% endif %}
+                </td>
+                <td style="font-family: monospace; font-size: 0.85rem;">
+                    {{ "%.4f"|format(region.min_lat) }}, {{ "%.4f"|format(region.min_lon) }}<br>
+                    {{ "%.4f"|format(region.max_lat) }}, {{ "%.4f"|format(region.max_lon) }}
+                </td>
+                <td>{{ region.downloaded_tiles }} / {{ region.total_tiles }}</td>
+                <td>
+                    {% if region.is_complete %}
+                    <span class="status status-ready">Complete</span>
+                    {% elif region.downloaded_tiles > 0 %}
+                    <span class="status status-pending">Downloading</span>
+                    {% else %}
+                    <span class="status status-pending">Pending</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="/web/regions/{{ region.id }}" class="btn">View</a>
+                    <button class="btn btn-danger" onclick="deleteRegion({{ region.id }})">Delete</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p>No regions defined yet.</p>
+    <p><a href="/web/map" class="btn btn-success">Create your first region</a></p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function deleteRegion(id) {
+    if (!confirm('Delete this region and all its tiles?')) return;
+
+    try {
+        const res = await fetch(`/api/v1/regions/${id}`, {method: 'DELETE'});
+        if (res.ok) {
+            window.location.reload();
+        } else {
+            alert('Failed to delete region');
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+</script>
+{% endblock %}

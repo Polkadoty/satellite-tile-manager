@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Export - Satellite Tile Manager{% endblock %}
+
+{% block content %}
+<h1>Export Tiles</h1>
+<p style="margin-bottom: 1.5rem;">Export tiles for ML training or drone deployment.</p>
+
+<div class="grid">
+    <div class="card">
+        <h3>Export Region</h3>
+        <form id="exportForm">
+            <div class="form-group">
+                <label for="region">Select Region</label>
+                <select id="region" required>
+                    <option value="">-- Select a region --</option>
+                    {% for region in regions %}
+                    <option value="{{ region.id }}">{{ region.name }} ({{ region.downloaded_tiles }} tiles)</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="format">Export Format</label>
+                <select id="format">
+                    <option value="manifest">Manifest (JSON)</option>
+                    <option value="zip">ZIP Archive</option>
+                    <option value="drone">Drone Package</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="gsdGroup" style="display: none;">
+                <label for="gsd">Target GSD (meters)</label>
+                <input type="number" id="gsd" step="0.1" value="1.0" min="0.1">
+            </div>
+
+            <button type="submit" class="btn btn-success">Export</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Export by Bounds</h3>
+        <form id="boundsForm">
+            <div class="form-group">
+                <label>Southwest Corner</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <input type="number" id="swLat" step="any" placeholder="Lat" required>
+                    <input type="number" id="swLon" step="any" placeholder="Lon" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Northeast Corner</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <input type="number" id="neLat" step="any" placeholder="Lat" required>
+                    <input type="number" id="neLon" step="any" placeholder="Lon" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="boundsZoom">Zoom Level</label>
+                <select id="boundsZoom">
+                    <option value="">Any</option>
+                    <option value="14">14</option>
+                    <option value="15">15</option>
+                    <option value="16">16</option>
+                    <option value="17">17</option>
+                    <option value="18">18</option>
+                </select>
+            </div>
+            <button type="submit" class="btn">Get Manifest</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <h3>API Usage</h3>
+    <p>Use these endpoints for programmatic access:</p>
+    <pre style="background: #f8f9fa; padding: 1rem; border-radius: 4px; overflow-x: auto;">
+# Get manifest for training
+curl -X POST http://localhost:8000/api/v1/export/manifest \
+  -H "Content-Type: application/json" \
+  -d '{"region_id": 1}'
+
+# Download ZIP archive
+curl -X POST http://localhost:8000/api/v1/export/zip \
+  -H "Content-Type: application/json" \
+  -d '{"region_id": 1}' \
+  -o tiles.zip
+
+# Get drone package
+curl "http://localhost:8000/api/v1/export/drone-package?region_id=1&target_gsd=1.0"
+    </pre>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('format').addEventListener('change', function() {
+    document.getElementById('gsdGroup').style.display =
+        this.value === 'drone' ? 'block' : 'none';
+});
+
+document.getElementById('exportForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const regionId = document.getElementById('region').value;
+    const format = document.getElementById('format').value;
+    const gsd = document.getElementById('gsd').value;
+
+    let url;
+    if (format === 'manifest') {
+        url = `/api/v1/export/manifest`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({region_id: parseInt(regionId)})
+        });
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        downloadBlob(blob, 'manifest.json');
+    } else if (format === 'zip') {
+        url = `/api/v1/export/zip`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({region_id: parseInt(regionId)})
+        });
+        const blob = await res.blob();
+        downloadBlob(blob, 'tiles.zip');
+    } else if (format === 'drone') {
+        url = `/api/v1/export/drone-package?region_id=${regionId}&target_gsd=${gsd}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        downloadBlob(blob, 'drone-package.json');
+    }
+});
+
+document.getElementById('boundsForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const params = {
+        min_lat: parseFloat(document.getElementById('swLat').value),
+        max_lat: parseFloat(document.getElementById('neLat').value),
+        min_lon: parseFloat(document.getElementById('swLon').value),
+        max_lon: parseFloat(document.getElementById('neLon').value)
+    };
+
+    const zoom = document.getElementById('boundsZoom').value;
+    if (zoom) params.zoom = parseInt(zoom);
+
+    const res = await fetch('/api/v1/export/manifest', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(params)
+    });
+    const data = await res.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    downloadBlob(blob, 'manifest.json');
+});
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}

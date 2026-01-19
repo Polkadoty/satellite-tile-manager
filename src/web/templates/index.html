@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Satellite Tile Manager{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="stats">
+    <div class="stat">
+        <div class="stat-value">{{ total_tiles }}</div>
+        <div class="stat-label">Total Tiles</div>
+    </div>
+    <div class="stat">
+        <div class="stat-value">{{ regions|length }}</div>
+        <div class="stat-label">Regions</div>
+    </div>
+</div>
+
+<div class="grid">
+    <div class="card">
+        <h2>Quick Actions</h2>
+        <p style="margin-bottom: 1rem;">Get started by defining a region of interest.</p>
+        <a href="/web/map" class="btn btn-success">Select Area on Map</a>
+    </div>
+
+    <div class="card">
+        <h2>Recent Regions</h2>
+        {% if regions %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Progress</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for region in regions %}
+                <tr>
+                    <td><a href="/web/regions/{{ region.id }}">{{ region.name }}</a></td>
+                    <td>{{ region.downloaded_tiles }}/{{ region.total_tiles }}</td>
+                    <td>
+                        {% if region.is_complete %}
+                        <span class="status status-ready">Complete</span>
+                        {% else %}
+                        <span class="status status-pending">In Progress</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No regions defined yet. <a href="/web/map">Create one</a>.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h2>API Endpoints</h2>
+    <p>Use these endpoints to integrate with your ML training pipeline or drone deployment tools:</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Endpoint</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>GET /api/v1/providers</code></td>
+                <td>List available tile providers</td>
+            </tr>
+            <tr>
+                <td><code>POST /api/v1/regions</code></td>
+                <td>Create a new region of interest</td>
+            </tr>
+            <tr>
+                <td><code>POST /api/v1/regions/{id}/download</code></td>
+                <td>Start downloading tiles for a region</td>
+            </tr>
+            <tr>
+                <td><code>GET /api/v1/tiles/query</code></td>
+                <td>Query tiles by bounding box</td>
+            </tr>
+            <tr>
+                <td><code>POST /api/v1/export/manifest</code></td>
+                <td>Generate manifest for training</td>
+            </tr>
+            <tr>
+                <td><code>GET /api/v1/export/drone-package</code></td>
+                <td>Export optimized package for drone</td>
+            </tr>
+        </tbody>
+    </table>
+    <p style="margin-top: 1rem;"><a href="/docs" class="btn">View Full API Documentation</a></p>
+</div>
+{% endblock %}
