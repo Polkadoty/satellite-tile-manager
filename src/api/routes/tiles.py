@@ -155,7 +155,7 @@ async def get_tile(
             "cloud_cover_pct": tile.cloud_cover_pct,
             "quality_score": tile.quality_score,
         },
-        "metadata": tile.metadata,
+        "extra_data": tile.extra_data,
         "capture_date": tile.capture_date.isoformat() if tile.capture_date else None,
         "download_date": tile.download_date.isoformat() if tile.download_date else None,
     }
@@ -288,7 +288,7 @@ async def download_single_tile(
         file_size_bytes=result.file_size,
         file_format=result.file_format,
         status=TileStatus.READY,
-        metadata=result.metadata,
+        extra_data=result.metadata,
     )
     db.add(tile)
     db.commit()

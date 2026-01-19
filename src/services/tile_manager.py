@@ -154,7 +154,7 @@ class TileManager:
                 tile.file_size_bytes = result.file_size
                 tile.file_format = result.file_format
                 tile.download_date = datetime.utcnow()
-                tile.metadata = result.metadata
+                tile.extra_data = result.metadata
 
                 # Calculate checksum
                 if result.file_path and result.file_path.exists():

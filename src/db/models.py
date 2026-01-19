@@ -165,7 +165,7 @@ class Tile(Base):
     download_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Metadata from provider
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    extra_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
