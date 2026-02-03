@@ -41,19 +41,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for web interface (skip in serverless)
+# Mount static files for web interface
+# In serverless, static files are served from /public by Vercel
 if not settings.is_serverless:
     from fastapi.staticfiles import StaticFiles
-    from fastapi.templating import Jinja2Templates
 
     static_dir = Path(__file__).parent.parent / "web" / "static"
     static_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
-    # Templates
-    templates_dir = Path(__file__).parent.parent / "web" / "templates"
-    templates_dir.mkdir(parents=True, exist_ok=True)
-    templates = Jinja2Templates(directory=str(templates_dir))
 
 # Import and include routers
 from src.api.routes import providers, regions, tiles, compare, export
@@ -106,7 +101,6 @@ async def get_stats():
     }
 
 
-# Web interface routes (only in non-serverless)
-if not settings.is_serverless:
-    from src.api.routes import web
-    app.include_router(web.router, prefix="/web", tags=["web"])
+# Web interface routes
+from src.api.routes import web
+app.include_router(web.router, prefix="/web", tags=["web"])
