@@ -38,15 +38,17 @@ def get_sync_engine():
         connect_args["check_same_thread"] = False
         engine = create_engine(url, connect_args=connect_args, echo=settings.debug)
 
-        @event.listens_for(engine, "connect")
-        def load_spatialite(dbapi_conn, connection_record):
-            dbapi_conn.enable_load_extension(True)
-            try:
-                dbapi_conn.load_extension("mod_spatialite")
-            except Exception:
-                # SpatiaLite not available, geometry will be stored as text
-                pass
-            dbapi_conn.enable_load_extension(False)
+        # Only try to load SpatiaLite if not in serverless (not available there)
+        if not settings.is_serverless:
+            @event.listens_for(engine, "connect")
+            def load_spatialite(dbapi_conn, connection_record):
+                try:
+                    dbapi_conn.enable_load_extension(True)
+                    dbapi_conn.load_extension("mod_spatialite")
+                    dbapi_conn.enable_load_extension(False)
+                except (AttributeError, Exception):
+                    # SpatiaLite or enable_load_extension not available
+                    pass
 
         return engine
 
