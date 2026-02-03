@@ -1,7 +1,9 @@
 """Database base configuration."""
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -16,14 +18,24 @@ class Base(DeclarativeBase):
     pass
 
 
+def get_database_url() -> str:
+    """Get database URL, adjusting for serverless environment."""
+    url = settings.database_url
+
+    # On Vercel/serverless, use /tmp for SQLite
+    if settings.is_serverless and url.startswith("sqlite"):
+        return "sqlite:////tmp/tiles.db"
+
+    return url
+
+
 def get_sync_engine():
     """Get synchronous database engine."""
-    url = settings.database_url
+    url = get_database_url()
     connect_args = {}
 
     if url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
-        # Enable spatialite for SQLite
         engine = create_engine(url, connect_args=connect_args, echo=settings.debug)
 
         @event.listens_for(engine, "connect")
@@ -43,7 +55,7 @@ def get_sync_engine():
 
 def get_async_engine():
     """Get async database engine."""
-    url = settings.database_url
+    url = get_database_url()
 
     # Convert to async URL
     if url.startswith("sqlite"):
@@ -56,14 +68,31 @@ def get_async_engine():
     return create_async_engine(async_url, echo=settings.debug)
 
 
-# Synchronous session factory
-sync_engine = get_sync_engine()
-SyncSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine)
+# Lazy initialization for serverless compatibility
+_sync_engine: Optional[object] = None
+_session_local: Optional[object] = None
+
+
+def _get_engine():
+    """Get or create the sync engine (lazy initialization)."""
+    global _sync_engine
+    if _sync_engine is None:
+        _sync_engine = get_sync_engine()
+    return _sync_engine
+
+
+def _get_session_factory():
+    """Get or create the session factory (lazy initialization)."""
+    global _session_local
+    if _session_local is None:
+        _session_local = sessionmaker(autocommit=False, autoflush=False, bind=_get_engine())
+    return _session_local
 
 
 def get_db() -> Session:
     """Get synchronous database session."""
-    db = SyncSessionLocal()
+    SessionLocal = _get_session_factory()
+    db = SessionLocal()
     try:
         yield db
     finally:
@@ -72,7 +101,10 @@ def get_db() -> Session:
 
 def init_db():
     """Initialize database tables."""
-    Base.metadata.create_all(bind=sync_engine)
-    # Ensure storage directories exist
-    settings.tiles_dir.mkdir(parents=True, exist_ok=True)
-    settings.cache_dir.mkdir(parents=True, exist_ok=True)
+    engine = _get_engine()
+    Base.metadata.create_all(bind=engine)
+
+    # Only create directories in non-serverless environments
+    if not settings.is_serverless:
+        settings.tiles_dir.mkdir(parents=True, exist_ok=True)
+        settings.cache_dir.mkdir(parents=True, exist_ok=True)

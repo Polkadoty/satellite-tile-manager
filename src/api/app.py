@@ -5,22 +5,24 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from src.config import settings
-from src.db import init_db
-from src.services import cleanup as cleanup_services, get_tile_cache
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
-    # Startup
-    init_db()
+    # Startup - only init DB in non-serverless or if explicitly needed
+    if not settings.is_serverless:
+        from src.db import init_db
+        init_db()
     yield
     # Shutdown - cleanup HTTP clients and caches
-    await cleanup_services()
+    try:
+        from src.services import cleanup as cleanup_services
+        await cleanup_services()
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -39,15 +41,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for web interface
-static_dir = Path(__file__).parent.parent / "web" / "static"
-static_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+# Mount static files for web interface (skip in serverless)
+if not settings.is_serverless:
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.templating import Jinja2Templates
 
-# Templates
-templates_dir = Path(__file__).parent.parent / "web" / "templates"
-templates_dir.mkdir(parents=True, exist_ok=True)
-templates = Jinja2Templates(directory=str(templates_dir))
+    static_dir = Path(__file__).parent.parent / "web" / "static"
+    static_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    # Templates
+    templates_dir = Path(__file__).parent.parent / "web" / "templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    templates = Jinja2Templates(directory=str(templates_dir))
 
 # Import and include routers
 from src.api.routes import providers, regions, tiles, compare, export
@@ -61,30 +67,46 @@ app.include_router(export.router, prefix="/api/v1/export", tags=["export"])
 
 @app.get("/")
 async def root():
-    """Root endpoint redirects to web interface."""
+    """Root endpoint - API info in serverless, redirect to web otherwise."""
+    if settings.is_serverless:
+        return {
+            "name": "Satellite Tile Manager API",
+            "version": "0.1.0",
+            "docs": "/docs",
+            "health": "/health",
+        }
     from fastapi.responses import RedirectResponse
-
     return RedirectResponse(url="/web")
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "version": "0.1.0"}
+    return {
+        "status": "healthy",
+        "version": "0.1.0",
+        "environment": "serverless" if settings.is_serverless else "standard",
+    }
 
 
 @app.get("/stats")
 async def get_stats():
     """Get application statistics including cache metrics."""
-    cache = get_tile_cache()
+    try:
+        from src.services import get_tile_cache
+        cache = get_tile_cache()
+        cache_stats = cache.stats()
+    except Exception:
+        cache_stats = {"error": "Cache not available"}
+
     return {
         "status": "healthy",
         "version": "0.1.0",
-        "cache": cache.stats(),
+        "cache": cache_stats,
     }
 
 
-# Web interface routes
-from src.api.routes import web
-
-app.include_router(web.router, prefix="/web", tags=["web"])
+# Web interface routes (only in non-serverless)
+if not settings.is_serverless:
+    from src.api.routes import web
+    app.include_router(web.router, prefix="/web", tags=["web"])
