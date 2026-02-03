@@ -1,17 +1,22 @@
 """Tile comparison service."""
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING, Any
 
 # Optional dependencies for serverless compatibility
+HAS_IMAGE_DEPS = False
 try:
     import numpy as np
     from PIL import Image
     HAS_IMAGE_DEPS = True
 except ImportError:
-    HAS_IMAGE_DEPS = False
     np = None  # type: ignore
     Image = None  # type: ignore
+
+if TYPE_CHECKING:
+    import numpy as np  # noqa: F811
 
 
 class TileComparator:
