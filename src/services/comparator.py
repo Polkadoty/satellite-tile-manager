@@ -3,8 +3,15 @@
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
-from PIL import Image
+# Optional dependencies for serverless compatibility
+try:
+    import numpy as np
+    from PIL import Image
+    HAS_IMAGE_DEPS = True
+except ImportError:
+    HAS_IMAGE_DEPS = False
+    np = None  # type: ignore
+    Image = None  # type: ignore
 
 
 class TileComparator:
@@ -20,6 +27,9 @@ class TileComparator:
         Returns:
             Dictionary with comparison metrics
         """
+        if not HAS_IMAGE_DEPS:
+            return {"error": "Image comparison not available (numpy/PIL not installed)"}
+
         try:
             img_a = self._load_image(path_a)
             img_b = self._load_image(path_b)

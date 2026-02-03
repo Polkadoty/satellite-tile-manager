@@ -4,9 +4,12 @@ from src.config import settings
 from src.db.models import ProviderName
 from src.providers.base import TileProvider
 from src.providers.bing import BingMapsProvider
+from src.providers.esri import ESRIProvider
 from src.providers.google import GoogleMapsProvider
 from src.providers.mapbox import MapboxProvider
 from src.providers.naip import NAIPProvider
+from src.providers.osm import OSMProvider
+from src.providers.sentinel import SentinelProvider
 
 
 _PROVIDER_CLASSES: dict[ProviderName, type[TileProvider]] = {
@@ -14,6 +17,9 @@ _PROVIDER_CLASSES: dict[ProviderName, type[TileProvider]] = {
     ProviderName.GOOGLE: GoogleMapsProvider,
     ProviderName.BING: BingMapsProvider,
     ProviderName.MAPBOX: MapboxProvider,
+    ProviderName.OSM: OSMProvider,
+    ProviderName.SENTINEL: SentinelProvider,
+    ProviderName.ESRI: ESRIProvider,
 }
 
 _provider_instances: dict[ProviderName, TileProvider] = {}

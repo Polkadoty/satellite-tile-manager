@@ -30,6 +30,8 @@ class ProviderName(str, enum.Enum):
     BING = "bing"
     MAPBOX = "mapbox"
     OSM = "osm"
+    SENTINEL = "sentinel"
+    ESRI = "esri"
     CUSTOM = "custom"
 
 

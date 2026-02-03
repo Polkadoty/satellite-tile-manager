@@ -5,12 +5,15 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import httpx
 
 from src.config import settings
 from src.db.models import ProviderName
+
+if TYPE_CHECKING:
+    from src.services.http_client import HTTPClientManager, TileCache, RequestDeduplicator
 
 
 @dataclass
@@ -51,13 +54,30 @@ class TileProvider(ABC):
     max_zoom: int = 20
     tile_size: int = 256
     requires_api_key: bool = False
+    use_cache: bool = True  # Enable caching by default
 
     def __init__(self):
-        self.client = httpx.AsyncClient(timeout=settings.download_timeout_seconds)
+        # Lazy imports to avoid circular dependencies
+        from src.services.http_client import get_http_client_manager, get_tile_cache, get_request_deduplicator
+        self._client_manager = get_http_client_manager()
+        self._cache = get_tile_cache()
+        self._deduplicator = get_request_deduplicator()
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        """Get HTTP client (lazily initialized via manager)."""
+        import asyncio
+        # For sync access, return a simple client
+        # Actual async operations should use _get_client()
+        return httpx.AsyncClient(timeout=settings.download_timeout_seconds)
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get async HTTP client from manager."""
+        return await self._client_manager.get_client(self.name.value)
 
     async def close(self):
         """Close the HTTP client."""
-        await self.client.aclose()
+        await self._client_manager.close_client(self.name.value)
 
     @abstractmethod
     async def get_tile(self, x: int, y: int, zoom: int) -> TileResult:
@@ -199,6 +219,8 @@ class TileProvider(ABC):
     async def download_tile_image(self, url: str, save_path: Path) -> tuple[bool, Optional[str]]:
         """Download tile image from URL and save to disk.
 
+        Uses connection pooling and caching for efficiency.
+
         Args:
             url: URL to download from
             save_path: Path to save the image
@@ -207,7 +229,8 @@ class TileProvider(ABC):
             Tuple of (success, error_message)
         """
         try:
-            response = await self.client.get(url)
+            client = await self._get_client()
+            response = await client.get(url)
             response.raise_for_status()
 
             save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -218,3 +241,59 @@ class TileProvider(ABC):
             return (False, f"HTTP error: {e}")
         except Exception as e:
             return (False, f"Download error: {e}")
+
+    async def download_tile_with_cache(
+        self, x: int, y: int, zoom: int, url: str, save_path: Path
+    ) -> tuple[bool, Optional[str], Optional[bytes]]:
+        """Download tile with caching and deduplication.
+
+        This method:
+        1. Checks in-memory cache first
+        2. Deduplicates concurrent requests for the same tile
+        3. Caches successful downloads for future requests
+
+        Args:
+            x, y, zoom: Tile coordinates
+            url: URL to download from
+            save_path: Path to save the image
+
+        Returns:
+            Tuple of (success, error_message, image_data)
+        """
+        provider_name = self.name.value
+
+        # Check cache first
+        if self.use_cache:
+            cached_data = await self._cache.get(provider_name, x, y, zoom)
+            if cached_data is not None:
+                # Write cached data to disk
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                save_path.write_bytes(cached_data)
+                return (True, None, cached_data)
+
+        # Use deduplicator for actual fetch
+        async def do_fetch():
+            client = await self._get_client()
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.content
+
+        try:
+            data = await self._deduplicator.get_or_fetch(
+                provider_name, x, y, zoom, do_fetch
+            )
+
+            # Save to disk
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            save_path.write_bytes(data)
+
+            # Update cache
+            if self.use_cache:
+                await self._cache.put(provider_name, x, y, zoom, data)
+
+            return (True, None, data)
+
+        except httpx.HTTPError as e:
+            return (False, f"HTTP error: {e}", None)
+        except Exception as e:
+            return (False, f"Download error: {e}", None)

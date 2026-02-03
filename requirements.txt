@@ -1,0 +1,17 @@
+# Minimal dependencies for Vercel serverless deployment
+# Heavy dependencies are excluded for size limits
+
+fastapi>=0.104.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+httpx>=0.25.0
+python-multipart>=0.0.6
+jinja2>=3.1.0
+sqlalchemy>=2.0.0
+
+# Note: The following are excluded for serverless compatibility:
+# - uvicorn (Vercel handles ASGI)
+# - pillow, numpy (too large)
+# - rasterio, geoalchemy2, shapely, pyproj (too large)
+# - aiofiles (not needed in serverless)
+# Use pyproject.toml for local development with full features.

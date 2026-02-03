@@ -1,0 +1,28 @@
+# Ignore pyproject.toml to use requirements.txt instead
+pyproject.toml
+
+# Ignore development/test files
+tests/
+venv/
+.venv/
+*.pyc
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Ignore data directories
+data/
+
+# Ignore docs
+*.md
+!README.md
+
+# Ignore IDE files
+.idea/
+.vscode/
+
+# Ignore docker files (not needed for Vercel)
+Dockerfile
+docker-compose.yml

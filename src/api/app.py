@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from src.config import settings
 from src.db import init_db
+from src.services import cleanup as cleanup_services, get_tile_cache
 
 
 @asynccontextmanager
@@ -18,8 +19,8 @@ async def lifespan(app: FastAPI):
     # Startup
     init_db()
     yield
-    # Shutdown
-    pass
+    # Shutdown - cleanup HTTP clients and caches
+    await cleanup_services()
 
 
 app = FastAPI(
@@ -70,6 +71,17 @@ async def root():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "version": "0.1.0"}
+
+
+@app.get("/stats")
+async def get_stats():
+    """Get application statistics including cache metrics."""
+    cache = get_tile_cache()
+    return {
+        "status": "healthy",
+        "version": "0.1.0",
+        "cache": cache.stats(),
+    }
 
 
 # Web interface routes
