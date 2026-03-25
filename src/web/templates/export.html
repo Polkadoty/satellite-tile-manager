@@ -4,7 +4,7 @@
 
 {% block content %}
 <h1>Export Tiles</h1>
-<p style="margin-bottom: 1.5rem;">Export tiles for ML training or drone deployment.</p>
+<p class="page-subtitle">Export tiles for ML training or drone deployment.</p>
 
 <div class="grid">
     <div class="card">
@@ -34,7 +34,7 @@
                 <input type="number" id="gsd" step="0.1" value="1.0" min="0.1">
             </div>
 
-            <button type="submit" class="btn btn-success">Export</button>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Export</button>
         </form>
     </div>
 
@@ -66,15 +66,15 @@
                     <option value="18">18</option>
                 </select>
             </div>
-            <button type="submit" class="btn">Get Manifest</button>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Get Manifest</button>
         </form>
     </div>
 </div>
 
 <div class="card">
     <h3>API Usage</h3>
-    <p>Use these endpoints for programmatic access:</p>
-    <pre style="background: #f8f9fa; padding: 1rem; border-radius: 4px; overflow-x: auto;">
+    <p style="margin-bottom: 1rem;">Use these endpoints for programmatic access.</p>
+    <pre>
 # Get manifest for training
 curl -X POST http://localhost:8000/api/v1/export/manifest \
   -H "Content-Type: application/json" \
@@ -87,8 +87,7 @@ curl -X POST http://localhost:8000/api/v1/export/zip \
   -o tiles.zip
 
 # Get drone package
-curl "http://localhost:8000/api/v1/export/drone-package?region_id=1&target_gsd=1.0"
-    </pre>
+curl "http://localhost:8000/api/v1/export/drone-package?region_id=1&target_gsd=1.0"</pre>
 </div>
 {% endblock %}
 
@@ -101,7 +100,6 @@ document.getElementById('format').addEventListener('change', function() {
 
 document.getElementById('exportForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-
     const regionId = document.getElementById('region').value;
     const format = document.getElementById('format').value;
     const gsd = document.getElementById('gsd').value;
@@ -137,17 +135,14 @@ document.getElementById('exportForm').addEventListener('submit', async function(
 
 document.getElementById('boundsForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-
     const params = {
         min_lat: parseFloat(document.getElementById('swLat').value),
         max_lat: parseFloat(document.getElementById('neLat').value),
         min_lon: parseFloat(document.getElementById('swLon').value),
         max_lon: parseFloat(document.getElementById('neLon').value)
     };
-
     const zoom = document.getElementById('boundsZoom').value;
     if (zoom) params.zoom = parseInt(zoom);
-
     const res = await fetch('/api/v1/export/manifest', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},

@@ -4,6 +4,7 @@
 
 {% block content %}
 <h1>Dashboard</h1>
+<p class="page-subtitle">Satellite tile management and download overview.</p>
 
 <div class="stats">
     <div class="stat">
@@ -18,13 +19,13 @@
 
 <div class="grid">
     <div class="card">
-        <h2>Quick Actions</h2>
+        <h3>Quick Actions</h3>
         <p style="margin-bottom: 1rem;">Get started by defining a region of interest.</p>
-        <a href="/web/map" class="btn btn-success">Select Area on Map</a>
+        <a href="/web/map" class="btn btn-primary">Select Area on Map</a>
     </div>
 
     <div class="card">
-        <h2>Recent Regions</h2>
+        <h3>Recent Regions</h3>
         {% if regions %}
         <table>
             <thead>
@@ -38,12 +39,12 @@
                 {% for region in regions %}
                 <tr>
                     <td><a href="/web/regions/{{ region.id }}">{{ region.name }}</a></td>
-                    <td>{{ region.downloaded_tiles }}/{{ region.total_tiles }}</td>
+                    <td style="font-family: var(--font-mono); font-size: 0.8rem;">{{ region.downloaded_tiles }}/{{ region.total_tiles }}</td>
                     <td>
                         {% if region.is_complete %}
-                        <span class="status status-ready">Complete</span>
+                        <span class="badge badge-ready">Complete</span>
                         {% else %}
-                        <span class="status status-pending">In Progress</span>
+                        <span class="badge badge-pending">In Progress</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -57,8 +58,8 @@
 </div>
 
 <div class="card">
-    <h2>API Endpoints</h2>
-    <p>Use these endpoints to integrate with your ML training pipeline or drone deployment tools:</p>
+    <h3>API Endpoints</h3>
+    <p style="margin-bottom: 1rem;">Use these endpoints to integrate with your ML training pipeline or drone deployment tools.</p>
     <table>
         <thead>
             <tr>

@@ -244,14 +244,17 @@ async def download_single_tile(
             "message": "Tile already exists",
             "tile_id": existing.id,
             "file_path": existing.file_path,
+            "gsd": existing.gsd,
+            "bounds": {
+                "min_lat": existing.min_lat,
+                "max_lat": existing.max_lat,
+                "min_lon": existing.min_lon,
+                "max_lon": existing.max_lon,
+            },
         }
 
     # Download the tile
-    import asyncio
-
-    result = asyncio.get_event_loop().run_until_complete(
-        tile_provider.get_tile(x, y, zoom)
-    )
+    result = await tile_provider.get_tile(x, y, zoom)
 
     if not result.success:
         raise HTTPException(status_code=500, detail=f"Download failed: {result.error}")
